@@ -10,6 +10,7 @@ import (
 
 type CountOptions struct {
 	ByteCount bool
+	LineCount bool
 }
 
 func main() {
@@ -39,31 +40,39 @@ func countFile(filename string, options CountOptions) (map[string]int64, error) 
 	defer file.Close()
 
 	counts := make(map[string]int64)
+	reader := bufio.NewReader(file)
+
+	var byteCount, lineCount int64
+
+	for {
+		b, err := reader.ReadByte()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error reading file: %w", err)
+		}
+		byteCount++
+		if b == '\n' {
+			lineCount++
+		}
+	}
 
 	if options.ByteCount {
-		reader := bufio.NewReader(file)
-		var byteCount int64
-		for {
-			_, err := reader.ReadByte()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, fmt.Errorf("error reading file: %w", err)
-			}
-			byteCount++
-		}
 		counts["bytes"] = byteCount
+	}
+
+	if options.LineCount {
+		counts["lines"] = lineCount
 	}
 
 	return counts, nil
 }
 
 func printCounts(counts map[string]int64, filename string) {
-	for _, countType := range []string{"bytes"} {
+	for _, countType := range []string{"lines", "bytes"} {
 		if count, ok := counts[countType]; ok {
-			//fmt.Printf("%d %s ", count, countType)
-			fmt.Printf("	%d ", count)
+			fmt.Printf("   %d ", count)
 		}
 	}
 	fmt.Println(filename)
@@ -71,9 +80,11 @@ func printCounts(counts map[string]int64, filename string) {
 
 func parseFlag() CountOptions {
 	byteCount := flag.Bool("c", false, "Count Bytes")
+	lineCount := flag.Bool("l", false, "Count Lines")
 
 	flag.Parse()
 	return CountOptions{
 		ByteCount: *byteCount,
+		LineCount: *lineCount,
 	}
 }
