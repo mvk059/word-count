@@ -10,10 +10,11 @@ import (
 )
 
 type CountOptions struct {
-	ByteCount bool
-	LineCount bool
-	WordCount bool
-	Order     []string
+	ByteCount      bool
+	LineCount      bool
+	WordCount      bool
+	CharacterCount bool
+	Order          []string
 }
 
 func main() {
@@ -25,6 +26,7 @@ func main() {
 		fmt.Println("  -l    Count Lines")
 		fmt.Println("  -w    Count Words")
 		fmt.Println("  -c    Count Bytes")
+		fmt.Println("  -m    Count Characters")
 		os.Exit(1)
 	}
 
@@ -48,22 +50,28 @@ func countFile(filename string, options CountOptions) (map[string]int64, error) 
 	counts := make(map[string]int64)
 	reader := bufio.NewReader(file)
 
-	var byteCount, lineCount, wordCount int64
+	var byteCount, lineCount, wordCount, characterCount int64
 	inWord := false
 
 	for {
-		b, err := reader.ReadByte()
+		r, size, err := reader.ReadRune() // Reads a single Unicode character (rune) from the input
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return nil, fmt.Errorf("error reading file: %w", err)
 		}
-		byteCount++
-		if b == '\n' {
+
+		// For ASCII text (where each character is one byte), byte count and character count will be the same.
+		// For text with multibyte Unicode characters (like emoji or non-Latin scripts),
+		//  byte count will be larger than character count.
+		byteCount += int64(size)
+		characterCount++
+
+		if r == '\n' {
 			lineCount++
 		}
-		if unicode.IsSpace(rune(b)) {
+		if unicode.IsSpace(r) {
 			inWord = false
 		} else {
 			if !inWord {
@@ -83,6 +91,10 @@ func countFile(filename string, options CountOptions) (map[string]int64, error) 
 
 	if options.WordCount {
 		counts["words"] = wordCount
+	}
+
+	if options.CharacterCount {
+		counts["characters"] = characterCount
 	}
 
 	return counts, nil
@@ -114,6 +126,9 @@ func parseArgs(args []string) (CountOptions, []string) {
 				case 'c':
 					options.ByteCount = true
 					options.Order = append(options.Order, "bytes")
+				case 'm':
+					options.CharacterCount = true
+					options.Order = append(options.Order, "characters")
 				}
 			}
 		} else {
