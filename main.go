@@ -20,35 +20,40 @@ type CountOptions struct {
 func main() {
 	options, filenames := parseArgs(os.Args[1:])
 
-	if len(filenames) == 0 {
-		fmt.Println("usage: mwc [-lwcm] [filename]")
-		fmt.Println("Options:")
-		fmt.Println("  -l    Count Lines")
-		fmt.Println("  -w    Count Words")
-		fmt.Println("  -c    Count Bytes")
-		fmt.Println("  -m    Count Characters")
+	if len(os.Args) == 1 || (len(filenames) == 0 && !hasAnyOption(options)) {
+		printUsage()
 		os.Exit(1)
 	}
 
-	for _, filename := range filenames {
-		counts, err := countFile(filename, options)
+	if len(filenames) == 0 {
+		// Read from stdin if no filename is provided
+		counts, err := processInput(os.Stdin, options)
 		if err != nil {
-			fmt.Printf("Error processing %s: %v\n", filename, err)
-			continue
+			fmt.Fprintf(os.Stderr, "Error processing stdin: %v\n", err)
+			os.Exit(1)
 		}
-		printCounts(counts, filename, options.Order)
+		printCounts(counts, "", options.Order)
+	} else {
+		for _, filename := range filenames {
+			file, err := os.Open(filename)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error opening %s: %v\n", filename, err)
+				continue
+			}
+			counts, err := processInput(file, options)
+			file.Close()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
+				continue
+			}
+			printCounts(counts, filename, options.Order)
+		}
 	}
 }
 
-func countFile(filename string, options CountOptions) (map[string]int64, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("error opening file: %w", err)
-	}
-	defer file.Close()
-
+func processInput(input io.Reader, options CountOptions) (map[string]int64, error) {
 	counts := make(map[string]int64)
-	reader := bufio.NewReader(file)
+	reader := bufio.NewReader(input)
 
 	var byteCount, lineCount, wordCount, characterCount int64
 	inWord := false
@@ -103,11 +108,13 @@ func countFile(filename string, options CountOptions) (map[string]int64, error) 
 func printCounts(counts map[string]int64, filename string, order []string) {
 	for _, countType := range order {
 		if count, ok := counts[countType]; ok {
-			fmt.Print("   ")
-			fmt.Printf("  %d ", count)
+			fmt.Printf("%8d", count)
 		}
 	}
-	fmt.Println(filename)
+	if filename != "" {
+		fmt.Printf(" %s", filename)
+	}
+	fmt.Println()
 }
 
 func parseArgs(args []string) (CountOptions, []string) {
@@ -148,4 +155,18 @@ func parseArgs(args []string) (CountOptions, []string) {
 	}
 
 	return options, filenames
+}
+
+func printUsage() {
+	fmt.Println("usage: mwc [-lwcm] [filename ...]")
+	fmt.Println("Options:")
+	fmt.Println("  -l    Count Lines")
+	fmt.Println("  -w    Count Words")
+	fmt.Println("  -c    Count Bytes")
+	fmt.Println("  -m    Count Characters")
+	fmt.Println("If no filename is provided, mwc reads from standard input.")
+}
+
+func hasAnyOption(options CountOptions) bool {
+	return options.LineCount || options.WordCount || options.ByteCount || options.CharacterCount
 }
