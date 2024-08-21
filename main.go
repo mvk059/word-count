@@ -21,7 +21,7 @@ func main() {
 	options, filenames := parseArgs(os.Args[1:])
 
 	if len(filenames) == 0 {
-		fmt.Println("Usage: mwc [options] <filename>")
+		fmt.Println("usage: mwc [-lwcm] [filename]")
 		fmt.Println("Options:")
 		fmt.Println("  -l    Count Lines")
 		fmt.Println("  -w    Count Words")
@@ -103,7 +103,8 @@ func countFile(filename string, options CountOptions) (map[string]int64, error) 
 func printCounts(counts map[string]int64, filename string, order []string) {
 	for _, countType := range order {
 		if count, ok := counts[countType]; ok {
-			fmt.Printf("   %d ", count)
+			fmt.Print("   ")
+			fmt.Printf("  %d ", count)
 		}
 	}
 	fmt.Println(filename)
@@ -112,9 +113,11 @@ func printCounts(counts map[string]int64, filename string, order []string) {
 func parseArgs(args []string) (CountOptions, []string) {
 	options := CountOptions{}
 	var filenames []string
+	hasOptions := false
 
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
+			hasOptions = true
 			for _, char := range arg[1:] {
 				switch char {
 				case 'l':
@@ -134,6 +137,14 @@ func parseArgs(args []string) (CountOptions, []string) {
 		} else {
 			filenames = append(filenames, arg)
 		}
+	}
+
+	// If no options were provided, use the default options
+	if !hasOptions {
+		options.LineCount = true
+		options.WordCount = true
+		options.ByteCount = true
+		options.Order = []string{"lines", "words", "bytes"}
 	}
 
 	return options, filenames
