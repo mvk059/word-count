@@ -29,7 +29,7 @@ func main() {
 		// Read from stdin if no filename is provided
 		counts, err := processInput(os.Stdin, options)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error processing stdin: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Error processing stdin: %v\n", err)
 			os.Exit(1)
 		}
 		printCounts(counts, "", options.Order)
@@ -37,13 +37,13 @@ func main() {
 		for _, filename := range filenames {
 			file, err := os.Open(filename)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error opening %s: %v\n", filename, err)
+				_, _ = fmt.Fprintf(os.Stderr, "Error opening %s: %v\n", filename, err)
 				continue
 			}
 			counts, err := processInput(file, options)
-			file.Close()
+			_ = file.Close()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
+				_, _ = fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
 				continue
 			}
 			printCounts(counts, filename, options.Order)
@@ -139,6 +139,10 @@ func parseArgs(args []string) (CountOptions, []string) {
 				case 'm':
 					options.CharacterCount = true
 					options.Order = append(options.Order, "characters")
+				default:
+					_, _ = fmt.Fprintf(os.Stderr, "%s: illegal option -- %c\n", os.Args[0], char)
+					_, _ = fmt.Fprintf(os.Stderr, "usage: %s [-clmw] [file ...]\n", os.Args[0])
+					os.Exit(1)
 				}
 			}
 		} else {
