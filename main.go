@@ -2,10 +2,10 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"unicode"
 )
 
@@ -17,15 +17,18 @@ type CountOptions struct {
 }
 
 func main() {
-	options := parseFlag()
+	options, filenames := parseArgs(os.Args[1:])
 
-	if flag.NArg() < 1 {
+	if len(filenames) == 0 {
 		fmt.Println("Usage: mwc [options] <filename>")
-		flag.PrintDefaults()
+		fmt.Println("Options:")
+		fmt.Println("  -l    Count Lines")
+		fmt.Println("  -w    Count Words")
+		fmt.Println("  -c    Count Bytes")
 		os.Exit(1)
 	}
 
-	for _, filename := range flag.Args() {
+	for _, filename := range filenames {
 		counts, err := countFile(filename, options)
 		if err != nil {
 			fmt.Printf("Error processing %s: %v\n", filename, err)
@@ -94,17 +97,29 @@ func printCounts(counts map[string]int64, filename string, order []string) {
 	fmt.Println(filename)
 }
 
-func parseFlag() CountOptions {
-	byteCount := flag.Bool("c", false, "Count Bytes")
-	lineCount := flag.Bool("l", false, "Count Lines")
-	wordCount := flag.Bool("w", false, "Word Lines")
+func parseArgs(args []string) (CountOptions, []string) {
+	options := CountOptions{}
+	var filenames []string
 
-	flag.Parse()
-	options := CountOptions{
-		ByteCount: *byteCount,
-		LineCount: *lineCount,
-		WordCount: *wordCount,
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			for _, char := range arg[1:] {
+				switch char {
+				case 'l':
+					options.LineCount = true
+					options.Order = append(options.Order, "lines")
+				case 'w':
+					options.WordCount = true
+					options.Order = append(options.Order, "words")
+				case 'c':
+					options.ByteCount = true
+					options.Order = append(options.Order, "bytes")
+				}
+			}
+		} else {
+			filenames = append(filenames, arg)
+		}
 	}
 
-	return options
+	return options, filenames
 }
