@@ -93,7 +93,7 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./mwc.exe
-        asset_name: mwc.exe
+        asset_name: mwc-windows.exe
         asset_content_type: application/octet-stream
         body: "Windows binary for mwc"
     
@@ -104,6 +104,6 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./mwc
-        asset_name: mwc
+        asset_name: mwc-mac
         asset_content_type: application/octet-stream
         body: "macOS binary for mwc"
