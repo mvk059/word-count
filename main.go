@@ -1,6 +1,3 @@
-//go:build mwc
-// +build mwc
-
 package main
 
 import (
