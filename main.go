@@ -17,6 +17,11 @@ type CountOptions struct {
 	Order          []string
 }
 
+type FileCount struct {
+	Filename string
+	Counts   map[string]int64
+}
+
 func main() {
 	options, filenames := parseArgs(os.Args[1:])
 
@@ -34,6 +39,8 @@ func main() {
 		}
 		printCounts(counts, "", options.Order)
 	} else {
+		var fileCounts []FileCount
+		totalCounts := make(map[string]int64)
 		for _, filename := range filenames {
 			file, err := os.Open(filename)
 			if err != nil {
@@ -46,7 +53,20 @@ func main() {
 				_, _ = fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", filename, err)
 				continue
 			}
-			printCounts(counts, filename, options.Order)
+			fileCounts = append(fileCounts, FileCount{Filename: filename, Counts: counts})
+			for k, v := range counts {
+				totalCounts[k] += v
+			}
+		}
+
+		// Print counts for each file
+		for _, fc := range fileCounts {
+			printCounts(fc.Counts, fc.Filename, options.Order)
+		}
+
+		// Print total if there's more than one file
+		if len(fileCounts) > 1 {
+			printCounts(totalCounts, "total", options.Order)
 		}
 	}
 }
