@@ -9,22 +9,30 @@ import (
 	"unicode"
 )
 
+// CountOptions holds the flags for different counting options
 type CountOptions struct {
 	ByteCount      bool
 	LineCount      bool
 	WordCount      bool
 	CharacterCount bool
-	Order          []string
+	Order          []string // Keeps track of the order in which options were specified
 }
 
+// FileCount holds the counts for a specific file
 type FileCount struct {
 	Filename string
 	Counts   map[string]int64
 }
 
 func main() {
-	options, filenames := parseArgs(os.Args[1:])
+	options, filenames, err := parseArgs(os.Args[1:])
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%s: %v\n", os.Args[0], err)
+		_, _ = fmt.Fprintf(os.Stderr, "usage: %s [-clmw] [file ...]\n", os.Args[0])
+		os.Exit(1)
+	}
 
+	// If no arguments provided or no valid options, print usage and exit
 	if len(os.Args) == 1 || (len(filenames) == 0 && !hasAnyOption(options)) {
 		printUsage()
 		os.Exit(1)
@@ -71,6 +79,7 @@ func main() {
 	}
 }
 
+// processInput reads from the input and counts bytes, lines, words, and characters based on the options
 func processInput(input io.Reader, options CountOptions) (map[string]int64, error) {
 	counts := make(map[string]int64)
 	reader := bufio.NewReader(input)
@@ -106,6 +115,7 @@ func processInput(input io.Reader, options CountOptions) (map[string]int64, erro
 		}
 	}
 
+	// Add counts to the map based on the options
 	if options.ByteCount {
 		counts["bytes"] = byteCount
 	}
@@ -125,6 +135,7 @@ func processInput(input io.Reader, options CountOptions) (map[string]int64, erro
 	return counts, nil
 }
 
+// printCounts outputs the counts in the specified order
 func printCounts(counts map[string]int64, filename string, order []string) {
 	for _, countType := range order {
 		if count, ok := counts[countType]; ok {
@@ -137,7 +148,8 @@ func printCounts(counts map[string]int64, filename string, order []string) {
 	fmt.Println()
 }
 
-func parseArgs(args []string) (CountOptions, []string) {
+// parseArgs processes command-line arguments and returns CountOptions and filenames
+func parseArgs(args []string) (CountOptions, []string, error) {
 	options := CountOptions{}
 	var filenames []string
 	hasOptions := false
@@ -160,9 +172,10 @@ func parseArgs(args []string) (CountOptions, []string) {
 					options.CharacterCount = true
 					options.Order = append(options.Order, "characters")
 				default:
-					_, _ = fmt.Fprintf(os.Stderr, "%s: illegal option -- %c\n", os.Args[0], char)
-					_, _ = fmt.Fprintf(os.Stderr, "usage: %s [-clmw] [file ...]\n", os.Args[0])
-					os.Exit(1)
+					//_, _ = fmt.Fprintf(os.Stderr, "%s: illegal option -- %c\n", os.Args[0], char)
+					//_, _ = fmt.Fprintf(os.Stderr, "usage: %s [-clmw] [file ...]\n", os.Args[0])
+					//os.Exit(1)
+					return CountOptions{}, nil, fmt.Errorf("illegal option -- %c", char)
 				}
 			}
 		} else {
@@ -178,9 +191,10 @@ func parseArgs(args []string) (CountOptions, []string) {
 		options.Order = []string{"lines", "words", "bytes"}
 	}
 
-	return options, filenames
+	return options, filenames, nil
 }
 
+// printUsage displays the usage information for the command
 func printUsage() {
 	fmt.Println("usage: mwc [-lwcm] [filename ...]")
 	fmt.Println("Options:")
@@ -191,6 +205,7 @@ func printUsage() {
 	fmt.Println("If no filename is provided, mwc reads from standard input.")
 }
 
+// hasAnyOption checks if any counting option is enabled
 func hasAnyOption(options CountOptions) bool {
 	return options.LineCount || options.WordCount || options.ByteCount || options.CharacterCount
 }
