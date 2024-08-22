@@ -46,10 +46,10 @@ jobs:
         go-version: '1.22'
     
     - name: Build for Windows
-      run: GOOS=windows GOARCH=amd64 go build -o mwc.exe main.go
+      run: GOOS=windows GOARCH=amd64 go build -o mwc.exe mwc.go
     
     - name: Build for macOS
-      run: GOOS=darwin GOARCH=amd64 go build -o mwc-mac main.go
+      run: GOOS=darwin GOARCH=amd64 go build -o mwc-mac mwc.go
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
