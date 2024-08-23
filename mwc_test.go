@@ -123,20 +123,58 @@ func TestStandardInput(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		options  CountOptions
+		args     []string
 		expected map[string]int64
+		order    []string
 	}{
 		{
 			name:     "Standard Input - Single Line",
+			input:    "Hello, World!",
+			args:     []string{"-l"},
+			expected: map[string]int64{"lines": 0},
+			order:    []string{"lines"},
+		},
+		{
+			name:     "Standard Input - Single Line with Newline",
 			input:    "Hello, World!\n",
-			options:  CountOptions{LineCount: true, Order: []string{"lines"}},
+			args:     []string{"-l"},
 			expected: map[string]int64{"lines": 1},
+			order:    []string{"lines"},
 		},
 		{
 			name:     "Standard Input - Multiple Lines",
+			input:    "Hello, World!\nGoodbye, World!",
+			args:     []string{"-l"},
+			expected: map[string]int64{"lines": 1},
+			order:    []string{"lines"},
+		},
+		{
+			name:     "Standard Input - Multiple Lines with Newline",
 			input:    "Hello, World!\nGoodbye, World!\n",
-			options:  CountOptions{LineCount: true, Order: []string{"lines"}},
+			args:     []string{"-l"},
 			expected: map[string]int64{"lines": 2},
+			order:    []string{"lines"},
+		},
+		{
+			name:     "Standard Input - Default Options",
+			input:    "Hello, World!\nGoodbye, World!\n",
+			args:     []string{},
+			expected: map[string]int64{"lines": 2, "words": 4, "bytes": 30},
+			order:    []string{"lines", "words", "bytes"},
+		},
+		{
+			name:     "Standard Input - All Options",
+			input:    "Hello, World!\nGoodbye, World!\n",
+			args:     []string{"-lwcm"},
+			expected: map[string]int64{"lines": 2, "words": 4, "bytes": 30, "characters": 30},
+			order:    []string{"lines", "words", "bytes", "characters"},
+		},
+		{
+			name:     "Standard Input - Custom Order",
+			input:    "Hello, World!\nGoodbye, World!\n",
+			args:     []string{"-wlc"},
+			expected: map[string]int64{"words": 4, "lines": 2, "bytes": 30},
+			order:    []string{"words", "lines", "bytes"},
 		},
 	}
 
@@ -148,10 +186,13 @@ func TestStandardInput(t *testing.T) {
 				t.Fatalf("Error creating pipe: %v", err)
 			}
 
-			// Save the original stdin
+			// Save the original stdin and args
 			oldStdin := os.Stdin
-			// Replace stdin with our pipe
+			oldArgs := os.Args
+
+			// Replace stdin with our pipe and set args
 			os.Stdin = r
+			os.Args = append([]string{"mwc"}, tt.args...)
 
 			// Write the test input to the pipe
 			go func() {
@@ -159,19 +200,42 @@ func TestStandardInput(t *testing.T) {
 				_, _ = w.Write([]byte(tt.input))
 			}()
 
-			// Run the processInput function
-			counts, err := processInput(os.Stdin, tt.options)
-			if err != nil {
-				t.Fatalf("Error processing input: %v", err)
+			// Capture stdout
+			oldStdout := os.Stdout
+			r2, w2, _ := os.Pipe()
+			os.Stdout = w2
+
+			// Run main
+			main()
+
+			// Restore stdout and close the write end of the pipe
+			w2.Close()
+			os.Stdout = oldStdout
+
+			// Read captured output
+			var buf bytes.Buffer
+			_, _ = io.Copy(&buf, r2)
+			output := strings.TrimSpace(buf.String())
+
+			// Restore the original stdin and args
+			os.Stdin = oldStdin
+			os.Args = oldArgs
+
+			// Parse the output
+			fields := strings.Fields(output)
+			if len(fields) != len(tt.expected) {
+				t.Fatalf("Expected %d fields, got %d", len(tt.expected), len(fields))
 			}
 
-			// Restore the original stdin
-			os.Stdin = oldStdin
-
-			// Check the results
-			for k, v := range tt.expected {
-				if counts[k] != v {
-					t.Errorf("Expected %s: %d, got: %d", k, v, counts[k])
+			// Check the counts
+			for i, countType := range tt.order {
+				expectedCount := tt.expected[countType]
+				actualCount, err := strconv.ParseInt(fields[i], 10, 64)
+				if err != nil {
+					t.Fatalf("Error parsing count for %s: %v", countType, err)
+				}
+				if actualCount != expectedCount {
+					t.Errorf("Expected %s count: %d, got: %d", countType, expectedCount, actualCount)
 				}
 			}
 		})
