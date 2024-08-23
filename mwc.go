@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // CountOptions holds the flags for different counting options
@@ -16,6 +18,7 @@ type CountOptions struct {
 	WordCount      bool
 	CharacterCount bool
 	Order          []string // Keeps track of the order in which options were specified
+	HelpRequested  bool
 }
 
 // FileCount holds the counts for a specific file
@@ -25,21 +28,33 @@ type FileCount struct {
 }
 
 func main() {
+	// Parse command-line arguments
 	options, filenames, err := parseArgs(os.Args[1:])
 	if err != nil {
+		// If there's an error (e.g., illegal option), print the error and usage, then exit
 		_, _ = fmt.Fprintf(os.Stderr, "%s: %v\n", os.Args[0], err)
 		_, _ = fmt.Fprintf(os.Stderr, "usage: %s [-clmw] [file ...]\n", os.Args[0])
 		os.Exit(1)
 	}
 
-	// If no arguments provided or no valid options, print usage and exit
-	if len(os.Args) == 1 || (len(filenames) == 0 && !hasAnyOption(options)) {
-		printUsage()
-		os.Exit(1)
+	// If no options are provided, use default options (equivalent to -lwc)
+	// This ensures default behavior even when reading from stdin
+	if !hasAnyOption(options) {
+		options.LineCount = true
+		options.WordCount = true
+		options.ByteCount = true
+		options.Order = []string{"lines", "words", "bytes"}
 	}
 
+	// Check if help is requested
+	if options.HelpRequested {
+		printUsage()
+		os.Exit(0)
+	}
+
+	// Process input based on whether filenames are provided
 	if len(filenames) == 0 {
-		// Read from stdin if no filename is provided
+		// No filenames provided, read from stdin
 		counts, err := processInput(os.Stdin, options)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Error processing stdin: %v\n", err)
@@ -47,6 +62,7 @@ func main() {
 		}
 		printCounts(counts, "", options.Order)
 	} else {
+		// Process each file provided
 		var fileCounts []FileCount
 		totalCounts := make(map[string]int64)
 		for _, filename := range filenames {
@@ -82,36 +98,45 @@ func main() {
 // processInput reads from the input and counts bytes, lines, words, and characters based on the options
 func processInput(input io.Reader, options CountOptions) (map[string]int64, error) {
 	counts := make(map[string]int64)
-	reader := bufio.NewReader(input)
+	reader := bufio.NewReaderSize(input, 1024*1024) // 1MB buffer
 
 	var byteCount, lineCount, wordCount, characterCount int64
 	inWord := false
 
+	// Buffer to read chunks of data
+	buf := make([]byte, 16*1024) // 16KB chunks
+
 	for {
-		r, size, err := reader.ReadRune() // Reads a single Unicode character (rune) from the input
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+		n, err := reader.Read(buf) // Reads 16KB chunks from the input
+		if err != nil && err != io.EOF {
 			return nil, fmt.Errorf("error reading file: %w", err)
 		}
 
 		// For ASCII text (where each character is one byte), byte count and character count will be the same.
 		// For text with multibyte Unicode characters (like emoji or non-Latin scripts),
 		//  byte count will be larger than character count.
-		byteCount += int64(size)
-		characterCount++
+		byteCount += int64(n)
 
-		if r == '\n' {
-			lineCount++
-		}
-		if unicode.IsSpace(r) {
-			inWord = false
-		} else {
-			if !inWord {
-				wordCount++
-				inWord = true
+		chunk := buf[:n]
+		lines := bytes.Count(chunk, []byte{'\n'})
+		lineCount += int64(lines)
+		characterCount += int64(utf8.RuneCount(chunk))
+
+		for len(chunk) > 0 {
+			r, size := utf8.DecodeRune(chunk)
+			if unicode.IsSpace(r) {
+				inWord = false
+			} else {
+				if !inWord {
+					wordCount++
+					inWord = true
+				}
 			}
+			chunk = chunk[size:]
+		}
+
+		if err == io.EOF {
+			break
 		}
 	}
 
@@ -155,6 +180,10 @@ func parseArgs(args []string) (CountOptions, []string, error) {
 	hasOptions := false
 
 	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			options.HelpRequested = true
+			return options, filenames, nil
+		}
 		if strings.HasPrefix(arg, "-") {
 			hasOptions = true
 			for _, char := range arg[1:] {
@@ -196,12 +225,15 @@ func parseArgs(args []string) (CountOptions, []string, error) {
 
 // printUsage displays the usage information for the command
 func printUsage() {
-	fmt.Println("usage: mwc [-lwcm] [filename ...]")
-	fmt.Println("Options:")
-	fmt.Println("  -l    Count Lines")
-	fmt.Println("  -w    Count Words")
-	fmt.Println("  -c    Count Bytes")
-	fmt.Println("  -m    Count Characters")
+	fmt.Println("Usage: mwc [-lwcm] [file ...]")
+	fmt.Println("Count lines, words, bytes, and characters in input files or stdin.")
+	fmt.Println("\nOptions:")
+	fmt.Println("  -l    		Count lines")
+	fmt.Println("  -w    		Count words")
+	fmt.Println("  -c    		Count bytes")
+	fmt.Println("  -m    		Count characters")
+	fmt.Println("  -h, --help	Display this help message")
+	fmt.Println("\nIf no options are specified, mwc behaves as if -lwc were specified.")
 	fmt.Println("If no filename is provided, mwc reads from standard input.")
 }
 
